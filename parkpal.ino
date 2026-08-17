@@ -17,6 +17,7 @@
 #include <DNSServer.h>
 #include <vector>
 #include <esp_system.h>
+#include <esp_sleep.h>
 
 #include "parkpal_types.h"
 #include "WeatherIcons.h"
@@ -291,6 +292,13 @@ static const char* DEFAULT_CONFIG = R"json({
   "rides_by_park_labels": {},
   "parks_tz": "EST5EDT,M3.2.0/2,M11.1.0/2",
   "countdowns_tz": "EST5EDT,M3.2.0/2,M11.1.0/2",
+  "power_saving_enabled": false,
+  "refresh_interval_minutes": 30,
+  "refresh_offset_minute": 2,
+  "settings_window_enabled": true,
+  "settings_window_start_minutes": 1200,
+  "settings_window_duration_minutes": 15,
+  "settings_window_tz": "CST6CDT,M3.2.0/2,M11.1.0/2",
   "countdowns_settings": { "show_mode": "single", "primary_id": "", "cycle_every_n_refreshes": 1 },
   "countdowns": []
 })json";
