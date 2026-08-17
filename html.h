@@ -140,7 +140,7 @@ static const char INDEX_HTML[] PROGMEM = R"html(
       margin-bottom: 8px;
     }
 
-    select, input[type="text"], input[type="date"], input[type="number"] {
+    select, input[type="text"], input[type="date"], input[type="number"], input[type="time"] {
       width: 100%;
       padding: 12px 14px;
       font-size: 16px;
@@ -760,6 +760,73 @@ static const char INDEX_HTML[] PROGMEM = R"html(
       <p class="helper">Used for countdowns.</p>
     </div>
 
+    <!-- Power Saving -->
+    <div class="card">
+      <h2 class="card-title">Power Saving</h2>
+
+      <label class="toggle-row">
+        <span class="label-text">Power saving</span>
+        <div class="toggle">
+          <input type="checkbox" id="power_saving_enabled">
+          <span class="toggle-slider"></span>
+        </div>
+      </label>
+      <p class="helper">When enabled, ParkPal sleeps between scheduled refreshes to reduce power use.</p>
+
+      <div id="power-saving-options">
+        <div class="row">
+          <label>
+            <span class="label-text">Refresh every</span>
+            <select id="refresh_interval_minutes">
+              <option value="15">15 minutes</option>
+              <option value="30">30 minutes</option>
+              <option value="60">60 minutes</option>
+            </select>
+          </label>
+
+          <label>
+            <span class="label-text">Minute offset</span>
+            <input type="number" id="refresh_offset_minute" min="0" max="59" step="1">
+          </label>
+        </div>
+        <p class="helper">For example, 30 minutes with an offset of 2 refreshes at :02 and :32.</p>
+
+        <label class="toggle-row">
+          <span class="label-text">Settings access window</span>
+          <div class="toggle">
+            <input type="checkbox" id="settings_window_enabled">
+            <span class="toggle-slider"></span>
+          </div>
+        </label>
+        <p class="helper">Keeps Wi-Fi available for a scheduled period so you can access parkpal.local.</p>
+
+        <div id="settings-window-options">
+          <div class="row">
+            <label>
+              <span class="label-text">Start time</span>
+              <input type="time" id="settings_window_start">
+            </label>
+
+            <label>
+              <span class="label-text">Duration</span>
+              <select id="settings_window_duration_minutes">
+                <option value="5">5 minutes</option>
+                <option value="10">10 minutes</option>
+                <option value="15">15 minutes</option>
+                <option value="30">30 minutes</option>
+                <option value="60">60 minutes</option>
+              </select>
+            </label>
+          </div>
+
+          <label>
+            <span class="label-text">Schedule timezone</span>
+            <select id="settings_window_tz"></select>
+          </label>
+        </div>
+      </div>
+    </div>
+
     <!-- Parks Settings -->
     <div id="parks-settings">
       <div class="card">
@@ -1191,6 +1258,13 @@ async function loadConfig() {
     cfg.countdowns = cfg.countdowns || [];
     cfg.countdowns_settings = cfg.countdowns_settings || { show_mode: 'single', primary_id: '', cycle_every_n_refreshes: 1 };
     cfg.countdowns_tz = cfg.countdowns_tz || detectDefaultDeviceTz();
+    cfg.power_saving_enabled = cfg.power_saving_enabled ?? false;
+    cfg.refresh_interval_minutes = cfg.refresh_interval_minutes ?? 30;
+    cfg.refresh_offset_minute = cfg.refresh_offset_minute ?? 2;
+    cfg.settings_window_enabled = cfg.settings_window_enabled ?? true;
+    cfg.settings_window_start_minutes = cfg.settings_window_start_minutes ?? 1200;
+    cfg.settings_window_duration_minutes = cfg.settings_window_duration_minutes ?? 15;
+    cfg.settings_window_tz = cfg.settings_window_tz || DEVICE_TIMEZONES[1].tz;
     
     $('status').textContent = 'Connected';
     $('status').classList.add('connected');
@@ -1252,6 +1326,24 @@ function gatherConfig() {
   cfg.trip_name = ($('trip_name').value || '').trim();
   cfg.units = $('units').value;
   cfg.countdowns_tz = $('device_tz').value;
+  cfg.power_saving_enabled = $('power_saving_enabled').checked;
+  cfg.refresh_interval_minutes = parseInt($('refresh_interval_minutes').value, 10) || 30;
+  cfg.refresh_offset_minute = Math.min(59, Math.max(0, parseInt($('refresh_offset_minute').value, 10) || 0));
+  cfg.settings_window_enabled = $('settings_window_enabled').checked;
+
+  const [settingsHour, settingsMinute] = ($('settings_window_start').value || '20:00')
+    .split(':')
+    .map(Number);
+
+  cfg.settings_window_start_minutes =
+    ((Number.isFinite(settingsHour) ? settingsHour : 20) * 60) +
+    (Number.isFinite(settingsMinute) ? settingsMinute : 0);
+
+  cfg.settings_window_duration_minutes =
+    parseInt($('settings_window_duration_minutes').value, 10) || 15;
+
+  cfg.settings_window_tz =
+    $('settings_window_tz').value || DEVICE_TIMEZONES[1].tz;
   
   // Set timezone based on resort
   const resort = RESORTS[cfg.resort];
@@ -1272,6 +1364,15 @@ function gatherConfig() {
 
 function populateUI() {
   populateDeviceTzOptions();
+  const settingsTzSelect = $('settings_window_tz');
+  settingsTzSelect.innerHTML = '';
+
+  for (const z of DEVICE_TIMEZONES) {
+    const opt = document.createElement('option');
+    opt.value = z.tz;
+    opt.textContent = z.label;
+    settingsTzSelect.appendChild(opt);
+  }
 
   // Mode
   $('mode-selector').value = cfg.mode;
@@ -1286,6 +1387,25 @@ function populateUI() {
   $('trip_name').value = cfg.trip_name || '';
   $('units').value = cfg.units || RESORTS[cfg.resort || 'orlando'].defaultUnits;
   $('device_tz').value = cfg.countdowns_tz || detectDefaultDeviceTz();
+  $('power_saving_enabled').checked = !!cfg.power_saving_enabled;
+  $('refresh_interval_minutes').value = String(cfg.refresh_interval_minutes ?? 30);
+  $('refresh_offset_minute').value = String(cfg.refresh_offset_minute ?? 2);
+  $('settings_window_enabled').checked = cfg.settings_window_enabled !== false;
+
+  const settingsStartMinutes = cfg.settings_window_start_minutes ?? 1200;
+  const settingsStartHour = Math.floor(settingsStartMinutes / 60);
+  const settingsStartMinute = settingsStartMinutes % 60;
+
+  $('settings_window_start').value =
+    `${String(settingsStartHour).padStart(2, '0')}:${String(settingsStartMinute).padStart(2, '0')}`;
+
+  $('settings_window_duration_minutes').value =
+    String(cfg.settings_window_duration_minutes ?? 15);
+
+  $('settings_window_tz').value =
+    cfg.settings_window_tz || DEVICE_TIMEZONES[1].tz;
+  
+  updatePowerSavingVisibility();
   
   // Parks
   renderParksGrid();
@@ -1322,6 +1442,20 @@ function updateModeVisibility() {
   const mode = $('mode-selector').value;
   $('parks-settings').classList.toggle('hidden', mode !== 'parks');
   $('countdowns-settings').classList.toggle('hidden', mode !== 'countdowns');
+}
+
+function updatePowerSavingVisibility() {
+  const powerEnabled = $('power_saving_enabled').checked;
+  const settingsWindowEnabled = $('settings_window_enabled').checked;
+
+  $('refresh_interval_minutes').disabled = !powerEnabled;
+  $('refresh_offset_minute').disabled = !powerEnabled;
+  $('settings_window_enabled').disabled = !powerEnabled;
+
+  const settingsControlsEnabled = powerEnabled && settingsWindowEnabled;
+  $('settings_window_start').disabled = !settingsControlsEnabled;
+  $('settings_window_duration_minutes').disabled = !settingsControlsEnabled;
+  $('settings_window_tz').disabled = !settingsControlsEnabled;
 }
 
 // ==============================================
@@ -1713,6 +1847,8 @@ function closeModal() {
 
 // Mode change
 $('mode-selector').addEventListener('change', updateModeVisibility);
+$('power_saving_enabled').addEventListener('change', updatePowerSavingVisibility);
+$('settings_window_enabled').addEventListener('change', updatePowerSavingVisibility);
 
 // Resort change
 $('resort-selector').addEventListener('change', () => {
