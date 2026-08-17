@@ -539,6 +539,13 @@ bool parseConfig(RuntimeConfig& out) {
     }
     out.parks_tz = dj["parks_tz"].as<String>();
     out.countdowns_tz = dj["countdowns_tz"].as<String>();
+    out.powerSettings.enabled = dj["power_saving_enabled"] | false;
+    out.powerSettings.refresh_interval_minutes = clampi(dj["refresh_interval_minutes"] | 30, 5, 1440);
+    out.powerSettings.refresh_offset_minute = clampi(dj["refresh_offset_minute"] | 2, 0, 59);
+    out.powerSettings.settings_window_enabled = dj["settings_window_enabled"] | true;
+    out.powerSettings.settings_window_start_minutes = clampi(dj["settings_window_start_minutes"] | 1200, 0, 1439);
+    out.powerSettings.settings_window_duration_minutes = clampi(dj["settings_window_duration_minutes"] | 15, 1, 240);
+    out.powerSettings.settings_window_tz = dj["settings_window_tz"].as<String>();
     JsonObject cs = dj["countdowns_settings"];
     out.countdownSettings.show_mode = cs["show_mode"] | "single";
     out.countdownSettings.primary_id = cs["primary_id"] | "";

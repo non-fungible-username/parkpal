@@ -27,11 +27,22 @@ struct CountdownSettings {
     int cycle_every_n_refreshes = 1;
 };
 
+struct PowerSettings {
+    bool enabled = false;
+    int refresh_interval_minutes = 30;
+    int refresh_offset_minute = 2;
+    bool settings_window_enabled = true;
+    int settings_window_start_minutes = 1200; // 8:00 PM
+    int settings_window_duration_minutes = 15;
+    String settings_window_tz = "CST6CDT,M3.2.0/2,M11.1.0/2";
+};
+
 struct RuntimeConfig {
     String mode = "parks";
     String resort = "orlando"; // "orlando" | "california" | "tokyo"
     String parks_tz = "EST5EDT,M3.2.0/2,M11.1.0/2";
     String countdowns_tz = "EST5EDT,M3.2.0/2,M11.1.0/2";
+    PowerSettings powerSettings;
     CountdownSettings countdownSettings;
     std::vector<CountdownItem> countdowns;
     bool metric = true;
