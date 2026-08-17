@@ -462,6 +462,38 @@ static time_t nextScheduledRefreshTime(const PowerSettings& settings, time_t now
     return mktime(&target);
 }
 
+static bool isInsideSettingsWindow(const PowerSettings& settings, time_t now) {
+    if (!settings.settings_window_enabled) {
+        return false;
+    }
+
+    TzGuard guard(settings.settings_window_tz.c_str());
+
+    struct tm localNow;
+    localtime_r(&now, &localNow);
+
+    const int currentMinute =
+        (localNow.tm_hour * 60) + localNow.tm_min;
+
+    const int startMinute =
+        clampi(settings.settings_window_start_minutes, 0, 1439);
+
+    const int durationMinutes =
+        clampi(settings.settings_window_duration_minutes, 1, 240);
+
+    const int endMinute =
+        (startMinute + durationMinutes) % (24 * 60);
+
+    if (startMinute < endMinute) {
+        return currentMinute >= startMinute &&
+           currentMinute < endMinute;
+    }
+
+    // Window crosses midnight.
+    return currentMinute >= startMinute ||
+       currentMinute < endMinute;
+}
+
 static bool computeIsoDatePlusMonthsInTz(const char* tz, int addMonths, String& outIso) {
     TzGuard guard(tz);
     time_t now;
