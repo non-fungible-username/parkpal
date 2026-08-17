@@ -485,6 +485,37 @@ bool parseConfig(RuntimeConfig& out) {
         dj["countdowns_tz"] = "EST5EDT,M3.2.0/2,M11.1.0/2";
         migrated = true;
     }
+    // Power-saving settings were added after the original ParkPal configuration.
+    // Seed them safely for existing devices. Power saving remains OFF until the
+    // user explicitly enables it from parkpal.local.
+    if (!dj.containsKey("power_saving_enabled")) {
+        dj["power_saving_enabled"] = false;
+        migrated = true;
+    }
+    if (!dj.containsKey("refresh_interval_minutes")) {
+        dj["refresh_interval_minutes"] = 30;
+        migrated = true;
+    }
+    if (!dj.containsKey("refresh_offset_minute")) {
+        dj["refresh_offset_minute"] = 2;
+        migrated = true;
+    }
+    if (!dj.containsKey("settings_window_enabled")) {
+        dj["settings_window_enabled"] = true;
+        migrated = true;
+    }
+    if (!dj.containsKey("settings_window_start_minutes")) {
+        dj["settings_window_start_minutes"] = 1200;
+        migrated = true;
+    }
+    if (!dj.containsKey("settings_window_duration_minutes")) {
+        dj["settings_window_duration_minutes"] = 15;
+        migrated = true;
+    }
+    if (!dj.containsKey("settings_window_tz")) {
+        dj["settings_window_tz"] = "CST6CDT,M3.2.0/2,M11.1.0/2";
+        migrated = true;
+    }
     if (!dj.containsKey("countdowns_settings")) {
         JsonObject cs = dj.createNestedObject("countdowns_settings");
         cs["show_mode"] = "single";
