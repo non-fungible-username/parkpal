@@ -422,6 +422,46 @@ struct TzGuard {
     }
 };
 
+static time_t nextScheduledRefreshTime(const PowerSettings& settings, time_t now) {
+    // Keep refreshes anchored to wall-clock time rather than sleeping for a
+    // fixed duration after each update. Example: 30-minute interval + offset 2
+    // produces :02 and :32 every hour without accumulating drift.
+    TzGuard guard(settings.settings_window_tz.c_str());
+
+    struct tm localNow;
+    localtime_r(&now, &localNow);
+
+    const int intervalMinutes = max(5, settings.refresh_interval_minutes);
+    const int offsetMinute = clampi(settings.refresh_offset_minute, 0, 59);
+
+    const int secondsSinceMidnight =
+        (localNow.tm_hour * 3600) +
+        (localNow.tm_min * 60) +
+        localNow.tm_sec;
+
+    int candidateMinutes = offsetMinute;
+
+    while ((candidateMinutes * 60) <= secondsSinceMidnight) {
+        candidateMinutes += intervalMinutes;
+    }
+
+    struct tm target = localNow;
+    target.tm_sec = 0;
+
+    if (candidateMinutes < 24 * 60) {
+        target.tm_hour = candidateMinutes / 60;
+        target.tm_min = candidateMinutes % 60;
+    } else {
+        candidateMinutes %= 24 * 60;
+        target.tm_mday += 1;
+        target.tm_hour = candidateMinutes / 60;
+        target.tm_min = candidateMinutes % 60;
+    }
+
+    target.tm_isdst = -1;
+    return mktime(&target);
+}
+
 static bool computeIsoDatePlusMonthsInTz(const char* tz, int addMonths, String& outIso) {
     TzGuard guard(tz);
     time_t now;
