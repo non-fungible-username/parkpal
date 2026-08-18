@@ -1795,6 +1795,7 @@ uint8_t api_fail_streak = 0;
 unsigned long wifi_disconnected_since_ms = 0;
 unsigned long boot_press_start_ms = 0;
 bool power_sleep_ready = false;
+time_t power_settings_window_end = 0;
 
 static String randomAlphaNum(size_t n) {
     const char* alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789abcdefghjkmnpqrstuvwxyz";
@@ -2105,11 +2106,59 @@ void loop() {
 
             if (now >= 1700000000 &&
                 !isInsideSettingsWindow(powerConfig.powerSettings, now)) {
-                Serial.println("Power saving: refresh complete and sleep is allowed");
+
+                const time_t wakeTime =
+                    nextPowerWakeTime(powerConfig.powerSettings, now);
+
+                Serial.printf(
+                    "Power saving: next wake in %lld seconds\n",
+                    static_cast<long long>(wakeTime - now)
+                );
             }
         }
 
         power_sleep_ready = false;
+    }
+
+    // If ParkPal is awake during the settings-access window, return to sleep
+    // as soon as that window ends instead of remaining awake until the next refresh.
+    RuntimeConfig awakePowerConfig;
+
+    if (parseConfig(awakePowerConfig) &&
+        awakePowerConfig.powerSettings.enabled) {
+
+        time_t now;
+        time(&now);
+
+        if (now >= 1700000000 &&
+            isInsideSettingsWindow(awakePowerConfig.powerSettings, now)) {
+
+            const time_t windowEnd =
+                currentSettingsWindowEndTime(
+                    awakePowerConfig.powerSettings,
+                    now
+                );
+
+            if (windowEnd > now && power_settings_window_end == 0) {
+                power_settings_window_end = windowEnd;
+
+                Serial.printf(
+                    "Power saving: settings window ends in %lld seconds\n",
+                    static_cast<long long>(windowEnd - now)
+                );
+            }
+        }
+        
+        if (power_settings_window_end > 0 &&
+            now >= power_settings_window_end) {
+
+            Serial.println(
+                "Power saving: settings window has ended"
+            );
+
+            power_settings_window_end = 0;
+        }
+
     }
 
     // Yield to keep WiFi/webserver healthy.
