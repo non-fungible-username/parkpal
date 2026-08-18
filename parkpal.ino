@@ -541,6 +541,32 @@ static time_t nextPowerWakeTime(const PowerSettings& settings, time_t now) {
     return min(refreshTime, settingsWindowTime);
 }
 
+static void enterDeepSleepUntil(time_t wakeTime, time_t now) {
+    if (wakeTime <= now) {
+        return;
+    }
+
+    const uint64_t sleepSeconds =
+        static_cast<uint64_t>(wakeTime - now);
+
+    Serial.printf(
+        "Power saving: sleeping for %llu seconds\n",
+        sleepSeconds
+    );
+
+    // Shut down Wi-Fi before entering deep sleep.
+    WiFi.disconnect(true);
+    WiFi.mode(WIFI_OFF);
+
+    // Wake the ESP32 when the scheduled time arrives.
+    esp_sleep_enable_timer_wakeup(
+        sleepSeconds * 1000000ULL
+    );
+
+    Serial.flush();
+    esp_deep_sleep_start();
+}
+
 static bool computeIsoDatePlusMonthsInTz(const char* tz, int addMonths, String& outIso) {
     TzGuard guard(tz);
     time_t now;
