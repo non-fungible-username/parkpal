@@ -494,6 +494,37 @@ static bool isInsideSettingsWindow(const PowerSettings& settings, time_t now) {
        currentMinute < endMinute;
 }
 
+static time_t nextSettingsWindowStartTime(const PowerSettings& settings, time_t now) {
+    if (!settings.settings_window_enabled) {
+        return 0;
+    }
+
+    TzGuard guard(settings.settings_window_tz.c_str());
+
+    struct tm localNow;
+    localtime_r(&now, &localNow);
+
+    const int startMinute =
+        clampi(settings.settings_window_start_minutes, 0, 1439);
+
+    struct tm target = localNow;
+    target.tm_hour = startMinute / 60;
+    target.tm_min = startMinute % 60;
+    target.tm_sec = 0;
+    target.tm_isdst = -1;
+
+    time_t candidate = mktime(&target);
+
+    // If today's settings window has already started, target tomorrow instead.
+    if (candidate <= now) {
+        target.tm_mday += 1;
+        target.tm_isdst = -1;
+        candidate = mktime(&target);
+    }
+
+    return candidate;
+}
+
 static bool computeIsoDatePlusMonthsInTz(const char* tz, int addMonths, String& outIso) {
     TzGuard guard(tz);
     time_t now;
