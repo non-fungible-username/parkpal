@@ -525,6 +525,22 @@ static time_t nextSettingsWindowStartTime(const PowerSettings& settings, time_t 
     return candidate;
 }
 
+static time_t nextPowerWakeTime(const PowerSettings& settings, time_t now) {
+    const time_t refreshTime =
+        nextScheduledRefreshTime(settings, now);
+
+    const time_t settingsWindowTime =
+        nextSettingsWindowStartTime(settings, now);
+
+    // No scheduled settings window, so the next refresh is our only wake event.
+    if (settingsWindowTime == 0) {
+        return refreshTime;
+    }
+
+    // Wake for whichever scheduled event happens first.
+    return min(refreshTime, settingsWindowTime);
+}
+
 static bool computeIsoDatePlusMonthsInTz(const char* tz, int addMonths, String& outIso) {
     TzGuard guard(tz);
     time_t now;
