@@ -525,6 +525,41 @@ static time_t nextSettingsWindowStartTime(const PowerSettings& settings, time_t 
     return candidate;
 }
 
+static time_t currentSettingsWindowEndTime(const PowerSettings& settings, time_t now) {
+    if (!isInsideSettingsWindow(settings, now)) {
+        return 0;
+    }
+
+    TzGuard guard(settings.settings_window_tz.c_str());
+
+    struct tm localNow;
+    localtime_r(&now, &localNow);
+
+    const int startMinute =
+        clampi(settings.settings_window_start_minutes, 0, 1439);
+
+    const int durationMinutes =
+        clampi(settings.settings_window_duration_minutes, 1, 240);
+
+    struct tm target = localNow;
+    target.tm_hour = startMinute / 60;
+    target.tm_min = startMinute % 60;
+    target.tm_sec = 0;
+    target.tm_isdst = -1;
+
+    time_t windowStart = mktime(&target);
+
+    // If the configured window crosses midnight and we're currently on the
+    // after-midnight portion, its start was yesterday.
+    if (windowStart > now) {
+        target.tm_mday -= 1;
+        target.tm_isdst = -1;
+        windowStart = mktime(&target);
+    }
+
+    return windowStart + (durationMinutes * 60);
+}
+
 static time_t nextPowerWakeTime(const PowerSettings& settings, time_t now) {
     const time_t refreshTime =
         nextScheduledRefreshTime(settings, now);
@@ -2059,6 +2094,22 @@ void loop() {
                 power_sleep_ready = true;
             }
         }
+    }
+    // A successful refresh may now be eligible for power-saving sleep.
+    if (power_sleep_ready) {
+        RuntimeConfig powerConfig;
+
+        if (parseConfig(powerConfig) && powerConfig.powerSettings.enabled) {
+            time_t now;
+            time(&now);
+
+            if (now >= 1700000000 &&
+                !isInsideSettingsWindow(powerConfig.powerSettings, now)) {
+                Serial.println("Power saving: refresh complete and sleep is allowed");
+            }
+        }
+
+        power_sleep_ready = false;
     }
 
     // Yield to keep WiFi/webserver healthy.
