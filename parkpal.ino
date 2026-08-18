@@ -1759,6 +1759,7 @@ int countdownRefreshCounter = 0;
 uint8_t api_fail_streak = 0;
 unsigned long wifi_disconnected_since_ms = 0;
 unsigned long boot_press_start_ms = 0;
+bool power_sleep_ready = false;
 
 static String randomAlphaNum(size_t n) {
     const char* alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789abcdefghjkmnpqrstuvwxyz";
@@ -1933,6 +1934,7 @@ void loop() {
     if (WiFi.status() != WL_CONNECTED) ensureWiFiConnected(0);
 
     if (refresh_now || millis() - lastTick >= REFRESH_MS || lastTick == 0) {
+        power_sleep_ready = false;
         lastTick = millis();
         refresh_now = false;
         RuntimeConfig RC;
@@ -1987,7 +1989,20 @@ void loop() {
             if (ok) {
                 String tripName = RC.trip_name;
                 if (!tripName.length()) tripName = inferTripNameFromParks(RC.resort, RC.parks, RC.parks_n);
-                renderParks(doc, ids, labels, parkName, RC.metric, RC.trip_enabled, RC.trip_date, tripName, legacy, RC.parks_tz.c_str());
+                renderParks(
+                    doc, 
+                    ids, 
+                    labels, 
+                    parkName, 
+                    RC.metric, 
+                    RC.trip_enabled, 
+                    RC.trip_date, 
+                    tripName, 
+                    legacy, 
+                    RC.parks_tz.c_str()
+                );
+
+                power_sleep_ready = true;
             } else {
                 if (wifiOk) {
                     // Retry sooner than the normal refresh interval.
@@ -2041,6 +2056,7 @@ void loop() {
                 renderMessage("Syncing Time...", MSG_FONT);
             } else {
                 renderCountdowns(activeItem, days, turnsAge);
+                power_sleep_ready = true;
             }
         }
     }
